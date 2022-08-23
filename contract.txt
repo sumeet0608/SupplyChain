@@ -41,24 +41,22 @@ contract SupplyChain {
     uint256 public docCtr = 0;
     //Patient Counter
     uint256 public patCtr = 0;
-    //Doctor Counter
-    //uint256 public solCtr = 0;
-    //Doctor Counter
-    //uint256 public parCtr = 0;
-
+    uint256 public disOrderCtr = 0;
+    uint256 public disSupplyCtr = 0;
+    uint256 public retOrderCtr = 0;
+    uint256 public retSupplyCtr = 0;
 
     //To store information about the medicine
     struct medicine {
         uint256 medId; //unique medicine id
-        string name; //name of the medicine 
-        uint256 MANid;       
+        string name; //name of the medicine      
+        uint256 MANid;  
     }
 
     struct DistOrder{
         uint256 disOrderID;
         uint256 medId;
         uint256 DISid; //id of the distributor for this particular medicine
-        uint256 ManQuantity;
         uint256 DisQuantity;
         STAGE stage; //current medicine stage
     }
@@ -68,10 +66,7 @@ contract SupplyChain {
     struct DistSupply{
         uint256 disSupplyID;
         uint256 disOrderID;
-        uint256 medId;
-        uint256 DISid; //id of the distributor for this particular medicine
         uint256 ManQuantity;
-        uint256 DisQuantity;
         STAGE stage; //current medicine stage
     }
     mapping(uint256 => DistSupply) public DISSUP;
@@ -79,9 +74,6 @@ contract SupplyChain {
     struct RetailSupply{
         uint256 RetailSupplyID;
         uint256 retOrderID;
-        uint256 medId;
-        uint256 retId; //id of the distributor for this particular medicine
-        uint256 RetQuantity;
         uint256 DisQuantity;
         STAGE stage; //current medicine stage
     }
@@ -93,18 +85,18 @@ contract SupplyChain {
         uint256 DISid; //id of the distributor for this particular medicine
         uint256 RETid; //id of the retailer for this particular medicine
         uint256 RetQuantity;
-        uint256 PatQuantity;
         STAGE stage; //current medicine stage
     }
     mapping(uint256 => RetailOrder) public RETORD;
 
     //To store all the medicines on the blockchain
     mapping(uint256 => medicine) public MedicineStock;
+    
     constructor() public{
-        MedicineStock[1] = medicine(1,"crocin",0);
-        MedicineStock[2] = medicine(2,"dolo",0);
-        MedicineStock[3] = medicine(3,"calpol",0);
-        MedicineStock[4] = medicine(4,"montefex",0);
+        MedicineStock[1] = medicine(1,"crocin",1);
+        MedicineStock[2] = medicine(2,"dolo",2);
+        MedicineStock[3] = medicine(3,"calpol",3);
+        MedicineStock[4] = medicine(4,"montefex",4);
     }
     
     //To show status to client applications
@@ -192,6 +184,15 @@ contract SupplyChain {
     }
     mapping(uint256 => prescription) public PRES;
 
+    struct report{
+        uint256 reportID;
+        uint256 OrderID;
+        uint256 expectedQty;
+        uint256 receivedQty;
+        STAGE stage;
+    }
+    mapping(uint256 => report) public REPORT;
+
     function addDoctor(
         address _address,
         string memory _name
@@ -240,14 +241,51 @@ contract SupplyChain {
         RET[retCtr] = retailer(_address, retCtr, _name, _place);
     }
 
+    function addDistOrder(
+        uint256 memory _medID,
+        uint256 memory _disID,
+        uint256 memory _disQuantity,
+        string memory _stage
+    ) public onlyByOwner() {
+        disOrderCtr++;
+        DISORDER[disOrderCtr] = DistOrder(disOrderCtr, _medID, _disID, _disQuantity,_stage);
+    }
+
+    function addDistSupply(
+        uint256 memory _OrderID,
+        uint256 memory _ManQuantity,
+        string memory _stage
+    ) public onlyByOwner() {
+        disSupplyCtr++;
+        DISSUP[disSupplyCtr] = DistSupply(disSupplyCtr, _OrderID, _ManQuantity, _stage);
+    }
+
+    function addRetOrder(
+        uint256 memory _medID,
+        uint256 memory _disID,
+        uint256 memory _retID,
+        uint256 memory _retQuantity,
+        string memory _stage
+    ) public onlyByOwner() {
+        retOrderCtr++;
+        RETORD[retOrderCtr] = RetailOrder(retOrderCtr, _medID, _disID, _retID,_retQuantity,_stage);
+    }
+    function addRetSupply(
+        uint256 memory _orderID,
+        uint256 memory _disQuantity,
+        string memory _stage
+    ) public onlyByOwner() {
+        retSupplyCtr++;
+        RETSUP[retSupplyCtr] = RetailSupply(retSupplyCtr, _orderID, _disQuantity, _stage);
+    }
+    // ** manufacturing quantity **
     //To manufacture medicine
     function Manufacturing(uint256 _medicineID,uint256 _quantity) public {
         require(_medicineID > 0 && _medicineID <= medicineCtr);
         uint256 _id = findMAN(msg.sender);
         require(_id > 0);
         require(_quantity>0);
-        require(MedicineStock[_medicineID].stage == STAGE.Init);
-        MedicineStock[_medicineID].MANid = _id;
+        //MedicineStock[_medicineID].MANid = _id;
         MedicineStock[_medicineID].ManQuantity = _quantity;
         MAN[_id].Quantity+=_quantity;
         MedicineStock[_medicineID].stage = STAGE.Manufacture;
