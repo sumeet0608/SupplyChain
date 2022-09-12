@@ -49,8 +49,8 @@ contract SupplyChain {
     //To store information about the medicine
     struct medicine {
         uint256 medId; //unique medicine id
-        string name; //name of the medicine      
-        uint256 MANid;  
+        string name; //name of the medicine
+        uint256 MANid;
     }
 
     struct DistOrder{
@@ -61,7 +61,6 @@ contract SupplyChain {
         STAGE stage; //current medicine stage
     }
     mapping(uint256 => DistOrder) public DISORDER;
-
 
     struct DistSupply{
         uint256 disSupplyID;
@@ -94,9 +93,9 @@ contract SupplyChain {
     
     constructor() public{
         MedicineStock[1] = medicine(1,"crocin",1);
-        MedicineStock[2] = medicine(2,"dolo",2);
-        MedicineStock[3] = medicine(3,"calpol",3);
-        MedicineStock[4] = medicine(4,"montefex",4);
+        MedicineStock[2] = medicine(2,"dolo",1);
+        MedicineStock[3] = medicine(3,"calpol",2);
+        MedicineStock[4] = medicine(4,"montefex",2);
     }
     
     //To show status to client applications
@@ -178,7 +177,7 @@ contract SupplyChain {
         uint256 patId; //patient id
         uint256[] medIDs;
         uint256[] medQtys;
-        uint256 dose;
+        uint256[] dose;
         bool isActive;
         uint256[] remQtys;
     }
@@ -278,17 +277,18 @@ contract SupplyChain {
         retSupplyCtr++;
         RETSUP[retSupplyCtr] = RetailSupply(retSupplyCtr, _orderID, _disQuantity, _stage);
     }
-    // ** manufacturing quantity **
+    
     //To manufacture medicine
-    function Manufacturing(uint256 _medicineID,uint256 _quantity) public {
-        require(_medicineID > 0 && _medicineID <= medicineCtr);
+    function ManufactureSupply(uint256 _medicineID,uint256 _quantity,uint256 disOrderId) public {
+        require(_medicineID > 0 && _medicineID <= medicineCtr && disOrderId > 0);
         uint256 _id = findMAN(msg.sender);
         require(_id > 0);
         require(_quantity>0);
         //MedicineStock[_medicineID].MANid = _id;
-        MedicineStock[_medicineID].ManQuantity = _quantity;
-        MAN[_id].Quantity+=_quantity;
-        MedicineStock[_medicineID].stage = STAGE.Manufacture;
+        disSupplyCtr++;
+        //stage
+        DISSUP[disSupplyCtr] = DistSupply(disSupplyCtr, disOrderId, _quantity, _stage);
+        //MedicineStock[_medicineID].stage = STAGE.Manufacture;
     }
 
     //To check if Manufacturer is available in the blockchain
@@ -300,21 +300,18 @@ contract SupplyChain {
         return 0;
     }
 
-    //To supply medicines from Manufacturer to distributor
-    function Distribute(uint256 _medicineID,uint256 _quantity) public {
+    //To order medicines from distributor to manufacturer
+    function DistributeOrder(uint256 _medicineID,uint256 _quantity) public {
         require(_medicineID > 0 && _medicineID <= medicineCtr);
         uint256 _id = findDIS(msg.sender);
         require(_id > 0);
         require(_quantity>0);
-
-        MedicineStock[_medicineID].DisQuantity = _quantity;
-        if( MedicineStock[_medicineID].DisQuantity< MedicineStock[_medicineID].ManQuantity){
-            //error
-        }
-        require(MedicineStock[_medicineID].stage == STAGE.Manufacture);
-        MedicineStock[_medicineID].DISid = _id;
-        DIS[_id].Quantity+=_quantity;
-        MedicineStock[_medicineID].stage = STAGE.Distribution;
+        //uint256 manId = findManFromMed(_medicineID);
+        
+        disOrderCtr++;
+        //stage
+        DISORDER[disOrderCtr] = DistOrder(disOrderCtr, _medicineID,_id, _quantity, _stage);
+        //MedicineStock[_medicineID].stage = STAGE.Distribution;
     }
 
     //To check if distributor is available in the blockchain
@@ -326,29 +323,51 @@ contract SupplyChain {
         return 0;
     }
 
-    //To supply medicines from distributor to retailer
-    function Retail(uint256 _medicineID) public {
+    function findManFromMed(uint256 _medId) private view returns (uint256) {
+        require(manCtr > 0);
+        for (uint256 i = 1; i <= medicineCtr; i++) {
+            if (MedicineStock[i].medId == _medId) return MedicineStock[i].MANid;
+        }
+        return 0;
+    }
+
+    function RetailOrder(uint256 _medicineID, uint256 _disId, uint256 _quantity)public {
         
         require(_medicineID > 0 && _medicineID <= medicineCtr);
         uint256 _id = findRET(msg.sender);
         require(_id > 0);
-        uint256 _quantity=MedicineStock[_id].RetQuantity;
+        require(_quantity>0);
+
+        //require(MedicineStock[_medicineID].stage == STAGE.Distribution);
+        retOrderCtr++;
+        RETORD[retOrderCtr] = RetailOrder(retOrderCtr, _medicineID,_disID,_id, _quantity, _stage);
+        //MedicineStock[_medicineID].stage = STAGE.Retail;
+    }
+
+
+    //To supply medicines from distributor to retailer
+    function RetailerSupply(uint256 _medicineID, uint256 _retOrdId, uint256 _quantity) public {
+        
+        require(_medicineID > 0 && _medicineID <= medicineCtr);
+        //uint256 _id = findRET(msg.sender);
+        //require(_id > 0);
+        require(_retOrdId > 0);
         require(_quantity>0);
         
-        MedicineStock[_medicineID].RetQuantity = _quantity;
-        //DIS[MED[ID].DISid].id
-        uint256 distId=MedicineStock[_medicineID].DISid;
-        //uint256 distQuant=DIS[disId].Quantity;
-        if(DIS[distId].Quantity- _quantity>0) {DIS[distId].Quantity=DIS[distId].Quantity- _quantity;
-        MedicineStock[_medicineID].DisQuantity-=_quantity;}
+        //if quantity supplied is less
+        /*
+        if(DIS[distId].Quantity- _quantity > 0) {
+            DIS[distId].Quantity=DIS[distId].Quantity- _quantity;
+            MedicineStock[_medicineID].DisQuantity-=_quantity;
+        }
+        */
 
         //else 
-        
-
-        require(MedicineStock[_medicineID].stage == STAGE.Distribution);
-        MedicineStock[_medicineID].RETid = _id;
-        RET[_id].Quantity+=_quantity;
-        MedicineStock[_medicineID].stage = STAGE.Retail;
+        //require(MedicineStock[_medicineID].stage == STAGE.Distribution);
+        retSupplyCtr++;
+        RETSUP[retSupplyCtr] = RetailSupply(retSupplyCtr, _retOrdId, _quantity, _stage);
+       
+        //MedicineStock[_medicineID].stage = STAGE.Retail;
     }
 
     //To check if retailer is available in the blockchain
@@ -426,7 +445,7 @@ contract SupplyChain {
         return 0;
     }
 
-    function prescribe(string memory _patName,string memory _patPhNo,string memory _email,string memory _medName,uint256 _quantity) public{        
+    function prescribe(string memory _patName,string memory _patPhNo,string memory _aadharNum,string memory _medName,uint256 _quantity) public{        
         uint256 _docId = findDoc(msg.sender);
         require(_docId>0);
         require(_quantity>0);        
@@ -463,3 +482,18 @@ contract SupplyChain {
         MedicineStock[_medId].RetQuantity=_quantity;
     }
 }
+
+
+/*
+    remaining --
+    presciption
+    selling meds
+    stages
+*/
+
+
+/*
+    // ** manufacturing quantity **
+    // hint message to distributor to supply to particular retailer
+    // stock of particular medicine with every retailer and distributor
+*/
