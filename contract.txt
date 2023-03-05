@@ -20,13 +20,15 @@ contract SupplyChain {
     }
 
     //stages of a medicine in pharma supply chain
-    enum STAGE {
+    /*enum STAGE {
         Init,
-        Manufacture,
-        Distribution,
-        Retail,
+        Manufacturer Supplying,
+        Distributer Ordered,
+        Distributer Supplying,
+        Retailer Ordered,
+        Retailer Supplying,
         Sold
-    }
+    }*/
     //using this we are going to track every single medicine the owner orders
 
     //Medicine count
@@ -45,6 +47,9 @@ contract SupplyChain {
     uint256 public disSupplyCtr = 0;
     uint256 public retOrderCtr = 0;
     uint256 public retSupplyCtr = 0;
+    uint256 public OrderCtr = 0;
+    uint256 public stageCtr = 0;
+    uint256 public presCtr = 0;
 
     //To store information about the medicine
     struct medicine {
@@ -52,6 +57,32 @@ contract SupplyChain {
         string name; //name of the medicine
         uint256 MANid;
     }
+    
+    struct stage{
+        uint256 medId;
+        uint256 orderID;
+        uint256 supplyID;
+        string currentStage;
+    }
+    mapping(uint256 => stage) public STAGE;
+
+    struct orders{
+        uint256 orderID;
+        uint256 medId;
+        uint256 retId;
+        uint256 disId;
+        uint256 quantity;
+    }
+    mapping(uint256 => orders) public ORDERS;
+
+    struct supplies{
+        uint256 supplyID;
+        uint256 medId;
+        uint256 retId;
+        uint256 disId;
+        uint256 quantity;
+    }
+    mapping(uint256 => supplies) public SUPPLY;
 
     struct DistOrder{
         uint256 disOrderID;
@@ -99,12 +130,25 @@ contract SupplyChain {
     }
     
     //To show status to client applications
-    function showStage(uint256 _medicineID)
+    function showStage(uint256 _orderID)
         public
         view
         returns (string memory)
     {
-        require(medicineCtr > 0);
+        require(OrderCtr > 0);
+        if(STAGE[_orderID].currentStage == "Retailer Order")
+            return "Retailer Order"
+        else if(STAGE[_orderID].currentStage == "Distributor Order")
+            return "Distributor Order"
+        else if(STAGE[_orderID].currentStage == "Manufacturer Supply")
+            return "Manufacturer Supply"
+        else if(STAGE[_orderID].currentStage == "Distributor Supply")
+            return "Distributor Supply"
+        else if(STAGE[_orderID].currentStage == "Sold")
+            return "Sold"
+        
+        
+        /*
         if (MedicineStock[_medicineID].stage == STAGE.Init)
             return "Medicine Ordered";
         //else if (MedicineStock[_medicineID].stage == STAGE.RawMaterialSupply)
@@ -119,6 +163,7 @@ contract SupplyChain {
           //  return "Partially Sold";
         else if (MedicineStock[_medicineID].stage == STAGE.sold)
             return "Medicine Sold";
+            */
     }
 
     //To store information about manufacturer
@@ -179,7 +224,7 @@ contract SupplyChain {
         uint256[] medQtys;
         uint256[] dose;
         bool isActive;
-        uint256[] remQtys;
+        //uint256[] remQtys;
     }
     mapping(uint256 => prescription) public PRES;
 
@@ -191,6 +236,15 @@ contract SupplyChain {
         STAGE stage;
     }
     mapping(uint256 => report) public REPORT;
+
+    /*function addOrders(
+        uint256 _retID,
+        uint256 _disID,
+        uint256 _medID
+    ) public onlyByOwner(){
+        OrderCtr++;
+        ORDERS[OrderCtr]=orders(OrderCtr,_medId,_retID,_disID);
+    }*/
 
     function addDoctor(
         address _address,
@@ -279,8 +333,8 @@ contract SupplyChain {
     }
     
     //To manufacture medicine
-    function ManufactureSupply(uint256 _medicineID,uint256 _quantity,uint256 disOrderId) public {
-        require(_medicineID > 0 && _medicineID <= medicineCtr && disOrderId > 0);
+    function ManufactureSupply(uint256 _medicineID,uint256 _quantity,uint256 _orderID) public {
+        require(_medicineID > 0 && _medicineID <= medicineCtr && _orderID > 0);
         uint256 _id = findMAN(msg.sender);
         require(_id > 0);
         require(_quantity>0);
@@ -339,8 +393,11 @@ contract SupplyChain {
         require(_quantity>0);
 
         //require(MedicineStock[_medicineID].stage == STAGE.Distribution);
-        retOrderCtr++;
-        RETORD[retOrderCtr] = RetailOrder(retOrderCtr, _medicineID,_disID,_id, _quantity, _stage);
+        //retOrderCtr++;
+        //RETORD[retOrderCtr] = RetailOrder(retOrderCtr, _medicineID,_disID,_id, _quantity, _stage);
+        OrderCtr++;
+        ORDERS[OrderCtr]= orders(OrderCtr,_medicineID,_id,_disID,_quantity);
+        STAGE[OrderCtr] = stage(_medicineID,OrderCtr,"Retailer Order")
         //MedicineStock[_medicineID].stage = STAGE.Retail;
     }
 
@@ -434,26 +491,32 @@ contract SupplyChain {
         }
         }
     }
-    function findPat(string memory _name,string memory _email) private view returns (uint256) {
+    function findPat(string memory _aadharNum) private view returns (uint256) {
         require(patCtr > 0);
         for (uint256 i = 1; i <= patCtr; i++) {
-            string memory _patName=PAT[i].name;
-            string memory _patEmail=PAT[i].email;
-            if (keccak256(abi.encode(_patName)) == keccak256(abi.encode(_name))&&keccak256(abi.encode(_patEmail)) == keccak256(abi.encode(_email))) 
+            string memory _patAadhar=PAT[i].aadharNum;
+            if (keccak256(abi.encode(_patAadhar)) == keccak256(abi.encode(_aadharNum))) 
                 return PAT[i].id;
         }
         return 0;
     }
 
-    function prescribe(string memory _patName,string memory _patPhNo,string memory _aadharNum,string memory _medName,uint256 _quantity) public{        
+    function prescribe(string memory _patName,string memory _patPhNo,string memory _aadharNum,string memory _medName,uint256 _quantity, uint256 _dose) public{        
         uint256 _docId = findDoc(msg.sender);
         require(_docId>0);
-        require(_quantity>0);        
+        //for loop
+        require(_quantity>0);
+        //for loop        
         uint256 _medId=findMed(_medName);
+        //for loop
         require(_medId>0);
-        patCtr++;
-        PAT[patCtr] = patient(patCtr, _patName, _patPhNo,_email,_docId,_medName,_quantity);
-        MedicineStock[_medId].PatQuantity=_quantity;
+        if((patientID = findPat(_aadharNum))<=0){
+            patientID=patCtr++;
+            PAT[patCtr] = patient(patCtr, _patName, _patPhNo,_aadharNum);
+        }
+        //MedicineStock[_medId].PatQuantity=_quantity;
+        presCtr++;
+        PRES[presCtr] = presciption(presCtr,_docID,patientID,_medName,_quantity,_dose,true);
     }
     function findDoc(address _address) private view returns (uint256) {
         require(docCtr > 0);
@@ -479,16 +542,18 @@ contract SupplyChain {
     {
         //js changes
         require((manCtr > 0) && (disCtr > 0) && (retCtr > 0));                
-        MedicineStock[_medId].RetQuantity=_quantity;
+        MedicineStock[_medId].RetQuantity = _quantity;
     }
 }
 
 
 /*
     remaining --
-    presciption
+    presciption -done
     selling meds
     stages
+    check funtions for staging
+    reports
 */
 
 
